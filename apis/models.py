@@ -39,7 +39,6 @@ class Book(TimestampMixin):
     description = models.TextField(blank=True, null=True)
     tsv_title = SearchVectorField(null=True, blank=True)
     tsv_description = SearchVectorField(null=True, blank=True)
-    embedding = models.JSONField(null=True, blank=True)  # Ensure this is a JSONField
 
     class Meta:
         indexes = [

@@ -16,6 +16,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .common.utils import recommend_books
 from .models import Book, Favorite
 from .serializers import BookSerializer, FavoriteSerializer
 
@@ -96,17 +97,6 @@ class FavoriteBooksAPIViewSet(ModelViewSet):
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
 
-        book = favorite.book
-        if not book.embedding:
-            call_command('generate_embeddings')
-
-        recommendations = self.get_recommendations(book)
-        serializer = self.get_serializer(favorite)
-        return Response({
-            "favorite": serializer.data,
-            "recommendations": BookSerializer(recommendations, many=True).data
-        })
-
     def create(self, request, *args, **kwargs):
         user = request.user
         book_id = request.data.get('book_id')
@@ -118,45 +108,50 @@ class FavoriteBooksAPIViewSet(ModelViewSet):
 
         favorite, created = Favorite.objects.get_or_create(user=user, book_id=book_id)
         # if not created:
-        # favorite, created = Favorite.objects.get_or_create(user=user, book_id=book_id)
-        # favorite=Favorite.objects.get(id=1)
         #     return Response({"error": "Book is already in your favorites."}, status=400)
-
-        # Generate embeddings if they don't exist
-        book = favorite.book
-        if not book.embedding:
-            call_command('importembbed')
-
-        recommendations = self.get_recommendations(book)
+        book_list = []
+        recommendations = recommend_books(favorite.book.description)
+        for book_id in recommendations:
+            book = Book.objects.get(id=book_id)
+            book_list.append(book)
         serializer = self.get_serializer(favorite)
         return Response({
             "favorite": serializer.data,
-            "recommendations": BookSerializer(recommendations, many=True).data
+            "recommendations": BookSerializer(book_list, many=True).data
         })
 
-    def get_recommendations(self, book, top_k=5):
-        """
-        Get recommendations for a given book based on content similarity.
-        """
-        # Load book embedding
-        book = Book.objects.get(id=book.id)
-        if not book.embedding:
-            return []
-
-        # Initialize ANN index
-        f = len(book.embedding)
-        t = AnnoyIndex(f, 'angular')
-
-        # Add all book embeddings to the ANN index
-        for b in Book.objects.exclude(id=book.id).values('id', 'embedding'):
-            t.add_item(int(b['id']), b['embedding'])
-        t.build(10)
-
-
-        # Find nearest neighbors using ANN
-        similar_ids = t.get_nns_by_vector(book.embedding, top_k)
-
-        # Fetch recommended books from the database
-        recommendations = Book.objects.filter(id__in=similar_ids)
-
-        return recommendations
+    # def get_recommendations(self, favorite_descriptions):
+    #     start_time = datetime.now()
+    #     print(f"start time {start_time}")
+    #     if isinstance(favorite_descriptions, str):
+    #         favorite_descriptions = [favorite_descriptions]
+    #
+    #     # Escape special characters and join descriptions into a tsquery format
+    #     def format_query(descriptions):
+    #         formatted_descriptions = []
+    #         for desc in descriptions:
+    #             # Escape single quotes and format as tsquery term
+    #             formatted_desc = desc.replace("'", "''")
+    #             formatted_descriptions.append(f"'{formatted_desc}'")
+    #         return ' & '.join(formatted_descriptions)
+    #
+    #     ts_query = format_query(favorite_descriptions)
+    #
+    #     # Perform the search using raw SQL
+    #     with connection.cursor() as cursor:
+    #         cursor.execute("""
+    #             SELECT id, title, ts_rank(tsv_description, to_tsquery(%s)) AS rank
+    #             FROM apis_book
+    #             WHERE to_tsquery(%s) @ tsv_description
+    #             ORDER BY rank DESC
+    #             LIMIT 5
+    #         """, [ts_query, ts_query])
+    #         results = cursor.fetchall()
+    #
+    #     # Fetch recommended books
+    #     recommended_books = []
+    #     for book_id, title, rank in results:
+    #         book = Book.objects.get(id=book_id)
+    #         recommended_books.append(book)
+    #     print(f"end time {datetime.now() - start_time}")
+    #     return recommended_books
