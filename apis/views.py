@@ -107,51 +107,10 @@ class FavoriteBooksAPIViewSet(ModelViewSet):
             return Response({"error": "Max of 20 favorite books allowed."}, status=400)
 
         favorite, created = Favorite.objects.get_or_create(user=user, book_id=book_id)
-        # if not created:
-        #     return Response({"error": "Book is already in your favorites."}, status=400)
-        book_list = []
         recommendations = recommend_books(favorite.book.description)
-        for book_id in recommendations:
-            book = Book.objects.get(id=book_id)
-            book_list.append(book)
+        book_list = Book.objects.filter(id__in=recommendations)
         serializer = self.get_serializer(favorite)
         return Response({
             "favorite": serializer.data,
             "recommendations": BookSerializer(book_list, many=True).data
         })
-
-    # def get_recommendations(self, favorite_descriptions):
-    #     start_time = datetime.now()
-    #     print(f"start time {start_time}")
-    #     if isinstance(favorite_descriptions, str):
-    #         favorite_descriptions = [favorite_descriptions]
-    #
-    #     # Escape special characters and join descriptions into a tsquery format
-    #     def format_query(descriptions):
-    #         formatted_descriptions = []
-    #         for desc in descriptions:
-    #             # Escape single quotes and format as tsquery term
-    #             formatted_desc = desc.replace("'", "''")
-    #             formatted_descriptions.append(f"'{formatted_desc}'")
-    #         return ' & '.join(formatted_descriptions)
-    #
-    #     ts_query = format_query(favorite_descriptions)
-    #
-    #     # Perform the search using raw SQL
-    #     with connection.cursor() as cursor:
-    #         cursor.execute("""
-    #             SELECT id, title, ts_rank(tsv_description, to_tsquery(%s)) AS rank
-    #             FROM apis_book
-    #             WHERE to_tsquery(%s) @ tsv_description
-    #             ORDER BY rank DESC
-    #             LIMIT 5
-    #         """, [ts_query, ts_query])
-    #         results = cursor.fetchall()
-    #
-    #     # Fetch recommended books
-    #     recommended_books = []
-    #     for book_id, title, rank in results:
-    #         book = Book.objects.get(id=book_id)
-    #         recommended_books.append(book)
-    #     print(f"end time {datetime.now() - start_time}")
-    #     return recommended_books
