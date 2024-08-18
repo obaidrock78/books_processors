@@ -101,3 +101,6 @@ static
 /staticfiles/
 
 deployment.html
+
+*.npy
+*.faiss
