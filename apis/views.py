@@ -1,6 +1,9 @@
+from django.contrib.auth import authenticate
 from django.db.models import Q, Count
 from rest_framework import status
 from rest_framework.generics import DestroyAPIView
+from django.contrib.auth import authenticate, login as django_login
+from rest_framework.views import APIView
 
 from apis.models import User, Author
 from apis.serializers import UserSignupSerializer, UserLoginSerializer, AuthorSerializer
@@ -105,27 +108,37 @@ class UserSignUpView(BaseAPIView, ModelViewSet):
             )
 
 
-class UserLoginView(BaseAPIView, ModelViewSet):
-    queryset = User.objects.all()
+class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
     permission_classes = []
 
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         try:
-            data = request.data
-            serializer = self.serializer_class(data=data, context={"request": request})
-            if serializer.is_valid(raise_exception=False):
-                return self.send_success_response(
-                    message="User logged in successfully.",
-                    data=serializer.data,
+            serializer = self.serializer_class(data=request.data)
+            if serializer.is_valid():
+                username = serializer.validated_data.get('username')
+                password = serializer.validated_data.get('password')
+
+                user = authenticate(username=username, password=password)
+                if user is not None:
+                    django_login(request, user)
+                    return Response(
+                        {"success": True, "message": "User logged in successfully."},
+                        status=status.HTTP_200_OK
+                    )
+                return Response(
+                    {"success": False, "message": "Invalid credentials."},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            return self.send_bad_request_response(
-                message=serializer.errors,
+            return Response(
+                {"success": False, "message": "Invalid data provided."},
+                status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            return self.send_bad_request_response(
-                message=e.args[0])
-
+            return Response(
+                {"success": False, "message": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class FavoriteBooksAPIViewSet(ModelViewSet):
     queryset = Favorite.objects.all()
