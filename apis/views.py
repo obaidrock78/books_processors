@@ -1,22 +1,16 @@
-from datetime import datetime
 
-import random
-
-from annoy import AnnoyIndex
-from django.core.management import call_command
 from django.db.models import Q, Count
-from django.db import connection
-from rest_framework.permissions import IsAuthenticated
 
-from apis.models import Book, User, Author
-from apis.serializers import BookSerializer, UserSignupSerializer, UserLoginSerializer, AuthorSerializer
+
+from apis.models import User, Author
+from apis.serializers import UserSignupSerializer, UserLoginSerializer, AuthorSerializer
 from common.response_mixins import BaseAPIView
 from rest_framework.viewsets import ModelViewSet
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .common.utils import recommend_books
+from common.utils import recommend_books
 from .models import Book, Favorite
 from .serializers import BookSerializer, FavoriteSerializer
 
