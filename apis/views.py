@@ -1,6 +1,6 @@
-
 from django.db.models import Q, Count
-
+from rest_framework import status
+from rest_framework.generics import DestroyAPIView
 
 from apis.models import User, Author
 from apis.serializers import UserSignupSerializer, UserLoginSerializer, AuthorSerializer
@@ -14,27 +14,71 @@ from common.utils import recommend_books
 from .models import Book, Favorite
 from .serializers import BookSerializer, FavoriteSerializer
 
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.pagination import LimitOffsetPagination
+
+
+class DefaultPagination(LimitOffsetPagination):
+    default_limit = 10
+    max_limit = 100
+
 
 class BooksAPIViewSet(BaseAPIView, ModelViewSet):
-    queryset = Book.objects.all()
     serializer_class = BookSerializer
-    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Disable pagination for this view
+
+    def get_permissions(self):
+        if self.request.method in ['GET']:
+            self.permission_classes = [AllowAny]
+        else:
+            self.permission_classes = [IsAuthenticated]
+        return super().get_permissions()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
         search_query = self.request.query_params.get('search', None)
+        queryset = Book.objects.all()
+
         if search_query:
             queryset = queryset.filter(
                 Q(title__icontains=search_query) |
                 Q(authors__name__icontains=search_query)
             )
-        return queryset
+        return queryset[:5]  # Limit to 5 results
 
+class BookDeleteAPIView(BaseAPIView, DestroyAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        book_id = self.kwargs.get('pk')
+        try:
+            book = self.get_queryset().get(id=book_id)
+            book.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Book.DoesNotExist:
+            return Response({"error": "Book not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class AuthorAPIViewSet(BaseAPIView, ModelViewSet):
-    queryset = Author.objects.all()
     serializer_class = AuthorSerializer
-    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Disable pagination for this view
+
+    def get_permissions(self):
+        if self.request.method in ['GET']:
+            self.permission_classes = [AllowAny]
+        else:
+            self.permission_classes = [IsAuthenticated]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        search_query = self.request.query_params.get('search', None)
+        queryset = Author.objects.all()
+
+        if search_query:
+            queryset = queryset.filter(
+                Q(name__icontains=search_query)
+            )
+        return queryset[:5]  # Limit to 5 results
 
 
 class UserSignUpView(BaseAPIView, ModelViewSet):
